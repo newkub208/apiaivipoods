@@ -1,24 +1,21 @@
-// server.js (Adapted for Vercel)
+// server.js (Adapted for Vercel Root)
 
 // Import required modules
 const express = require('express');
-// No longer need 'path' as we use a fixed temporary path
+const path = require('path'); // Added back for original file path logic
 const fs = require('fs').promises;
 
 // Initialize the express app
 const app = express();
-// PORT is managed by Vercel, no need to define it
 
 // IMPORTANT: Vercel has an ephemeral filesystem. Data written here will be lost.
-// We use the /tmp directory which is the only writable location.
-const AI_DATA_PATH = '/tmp/ai_data.json'; 
+const AI_DATA_PATH = path.join(__dirname, 'ai_data.json'); 
 const ADMIN_PASSWORD = "975699zz";
 
 // --- Middleware ---
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // We don't need express.static as Vercel handles static files via vercel.json
-
 
 // --- Helper Functions ---
 const readAiData = async () => {
@@ -27,7 +24,8 @@ const readAiData = async () => {
         const data = await fs.readFile(AI_DATA_PATH, 'utf8');
         return JSON.parse(data);
     } catch (error) {
-        console.log("ai_data.json not found in /tmp, creating a new one.");
+        // On Vercel, this will likely happen on every new instance start
+        console.log("ai_data.json not found, creating a new one.");
         await writeAiData({ bots: [] });
         return { bots: [] };
     }
@@ -37,7 +35,7 @@ const writeAiData = async (data) => {
     try {
         await fs.writeFile(AI_DATA_PATH, JSON.stringify(data, null, 2), 'utf8');
     } catch (error) {
-        console.error("Could not write to ai_data.json in /tmp.", error);
+        console.error("Could not write to ai_data.json.", error);
     }
 };
 
@@ -65,6 +63,9 @@ const updateMessageCount = async (botId) => {
 
 
 // --- API Routes ---
+// The rest of your API routes (/api/bots, /api/chat, etc.) go here
+// and remain unchanged from the previous version.
+
 app.get('/api/bots', async (req, res) => {
     const data = await readAiData();
     res.status(200).json(data.bots);
@@ -211,6 +212,6 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Remove app.listen() for Vercel
+
 // module.exports allows Vercel to handle the app
 module.exports = app;
