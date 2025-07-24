@@ -65,9 +65,91 @@ const updateMessageCount = async (botId) => {
     }
 };
 
+// Generic chat handler function to avoid code duplication
+async function handleChatRequest(prompt, botId, imageUrl) {
+    const fetch = (await import('node-fetch')).default;
+
+    const aiData = await readAiData();
+    const bot = aiData.bots.find(b => b.id === botId);
+
+    if (!bot) {
+        throw new Error('Bot configuration not found.');
+    }
+
+    if (imageUrl && bot.capability !== 'vision') {
+        throw new Error('This AI cannot process images.');
+    }
+    
+    const fetchOptions = {
+        headers: { 'Referer': 'https://kaiz-apis.gleeze.com/' }
+    };
+
+    let fullResponse;
+
+    if (bot.model === 'custom') {
+        if (imageUrl) throw new Error('Custom APIs do not support image input in this version.');
+        if (!bot.apiUrl || !bot.jsonResponsePath || !bot.apiUrl.includes('[PROMPT]')) throw new Error('Custom AI is not configured correctly.');
+        
+        const targetUrl = bot.apiUrl.replace(/\[PROMPT\]/g, encodeURIComponent(prompt));
+        console.log(`Routing to Custom API URL: "${targetUrl}"`);
+        const apiResponse = await fetch(targetUrl, fetchOptions);
+        if (!apiResponse.ok) throw new Error(`Custom API responded with status ${apiResponse.status}: ${await apiResponse.text()}`);
+        
+        const contentType = apiResponse.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const errorText = await apiResponse.text();
+            throw new Error(`API ภายนอกไม่ได้ส่งข้อมูลกลับมาเป็น JSON (อาจจะล่มชั่วขณะ). Response: ${errorText.substring(0, 200)}...`);
+        }
+        
+        const data = await apiResponse.json();
+        const responseText = resolvePath(data, bot.jsonResponsePath);
+        if (responseText === undefined || responseText === null) throw new Error(`Could not find response in custom API result using path: "${bot.jsonResponsePath}"`);
+        
+        fullResponse = String(responseText);
+
+    } else {
+        // Pre-built API logic
+        const uid = '1';
+        const apiKey = 'e62d60dd-8853-4233-bbcb-9466b4cbc265';
+        const baseUrl = 'https://kaiz-apis.gleeze.com/api/';
+        
+        const systemPrompt = bot.systemPrompt || '';
+        const finalPrompt = `${systemPrompt}\n\n${prompt}`;
+        const currentModel = bot.model;
+        
+        console.log(`Routing to Text Generation API for model: "${currentModel}"`);
+        const promptParam = (currentModel.startsWith('gpt') || currentModel.startsWith('claude')) ? 'ask' : 'q';
+        let targetUrl = `${baseUrl}${currentModel}?${promptParam}=${encodeURIComponent(finalPrompt)}&uid=${uid}&apikey=${apiKey}`;
+        
+        if (bot.capability === 'vision' && imageUrl) {
+            targetUrl += `&imageUrl=${encodeURIComponent(imageUrl)}`;
+            console.log('Image included in API call.');
+        } else if (currentModel.includes('gemini')) {
+            targetUrl += '&imageUrl=';
+        }
+        if (currentModel === 'gpt-4o') targetUrl += '&webSearch=off';
+
+        const apiResponse = await fetch(targetUrl, fetchOptions);
+        if (!apiResponse.ok) throw new Error(`External Text API responded with status ${apiResponse.status}: ${await apiResponse.text()}`);
+        
+         const contentType = apiResponse.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const errorText = await apiResponse.text();
+            throw new Error(`API ภายนอกไม่ได้ส่งข้อมูลกลับมาเป็น JSON (อาจจะล่มชั่วขณะ). Response: ${errorText.substring(0, 200)}...`);
+        }
+        
+        const data = await apiResponse.json();
+        const responseText = data.response || data.result || (data[0] ? data[0].response : undefined);
+        if (!responseText) throw new Error('Invalid or unexpected response format from external AI API.');
+        
+        fullResponse = responseText;
+    }
+
+    await updateMessageCount(botId);
+    return fullResponse;
+}
+
 // --- API Routes ---
-// The rest of your API routes (/api/bots, /api/chat, etc.) go here
-// and remain unchanged from the previous version.
 app.get('/api/bots', async (req, res) => {
     const data = await readAiData();
     res.status(200).json(data.bots);
@@ -119,98 +201,35 @@ app.delete('/api/bots/:id', async (req, res) => {
     }
 });
 
-app.post('/api/chat', async (req, res) => {
-    const fetch = (await import('node-fetch')).default;
-    const { prompt, botId, imageUrl } = req.body;
+// NEW: Handle GET requests from copied API links
+app.get('/api/chat', async (req, res) => {
+    const { prompt, botId, model } = req.query; // 'model' is legacy from old copy link, can be ignored
+    if (!prompt || !botId) {
+        return res.status(400).json({ content: 'Parameters "prompt" and "botId" are required for GET requests.' });
+    }
+    try {
+        const responseContent = await handleChatRequest(prompt, botId, null); // No imageUrl for GET
+        // For GET requests, we can just send the JSON back.
+        res.status(200).json({ response: responseContent });
+    } catch (error) {
+        console.error(`Error in /api/chat (GET):`, error.message);
+        res.status(500).json({ error: `ขออภัย, เกิดข้อผิดพลาด: ${error.message}` });
+    }
+});
 
+
+// UPDATED: Handle POST requests from the web app
+app.post('/api/chat', async (req, res) => {
+    const { prompt, botId, imageUrl } = req.body;
     if (!prompt && !imageUrl) {
         return res.status(400).json({ content: 'Prompt or image is required.' });
     }
      if (!botId) {
         return res.status(400).json({ content: 'Parameter "botId" is required.' });
     }
-
     try {
-        const aiData = await readAiData();
-        const bot = aiData.bots.find(b => b.id === botId);
-
-        if (!bot) {
-            throw new Error('Bot configuration not found.');
-        }
-
-        if (imageUrl && bot.capability !== 'vision') {
-            throw new Error('This AI cannot process images.');
-        }
-        
-        const fetchOptions = {
-            headers: { 'Referer': 'https://kaiz-apis.gleeze.com/' }
-        };
-
-        let fullResponse;
-
-        if (bot.model === 'custom') {
-            if (imageUrl) throw new Error('Custom APIs do not support image input in this version.');
-            if (!bot.apiUrl || !bot.jsonResponsePath || !bot.apiUrl.includes('[PROMPT]')) throw new Error('Custom AI is not configured correctly.');
-            
-            const targetUrl = bot.apiUrl.replace(/\[PROMPT\]/g, encodeURIComponent(prompt));
-            console.log(`Routing to Custom API URL: "${targetUrl}"`);
-            const apiResponse = await fetch(targetUrl, fetchOptions);
-            if (!apiResponse.ok) throw new Error(`Custom API responded with status ${apiResponse.status}: ${await apiResponse.text()}`);
-            
-            const contentType = apiResponse.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const errorText = await apiResponse.text();
-                throw new Error(`API ภายนอกไม่ได้ส่งข้อมูลกลับมาเป็น JSON (อาจจะล่มชั่วขณะ). Response: ${errorText.substring(0, 200)}...`);
-            }
-            
-            const data = await apiResponse.json();
-            const responseText = resolvePath(data, bot.jsonResponsePath);
-            if (responseText === undefined || responseText === null) throw new Error(`Could not find response in custom API result using path: "${bot.jsonResponsePath}"`);
-            
-            fullResponse = String(responseText);
-
-        } else {
-            // Pre-built API logic
-            const uid = '1';
-            const apiKey = 'e62d60dd-8853-4233-bbcb-9466b4cbc265';
-            const baseUrl = 'https://kaiz-apis.gleeze.com/api/';
-            
-            const systemPrompt = bot.systemPrompt || '';
-            const finalPrompt = `${systemPrompt}\n\n${prompt}`;
-            const currentModel = bot.model;
-            
-            console.log(`Routing to Text Generation API for model: "${currentModel}"`);
-            const promptParam = (currentModel.startsWith('gpt') || currentModel.startsWith('claude')) ? 'ask' : 'q';
-            let targetUrl = `${baseUrl}${currentModel}?${promptParam}=${encodeURIComponent(finalPrompt)}&uid=${uid}&apikey=${apiKey}`;
-            
-            if (bot.capability === 'vision' && imageUrl) {
-                targetUrl += `&imageUrl=${encodeURIComponent(imageUrl)}`;
-                console.log('Image included in API call.');
-            } else if (currentModel.includes('gemini')) {
-                targetUrl += '&imageUrl=';
-            }
-            if (currentModel === 'gpt-4o') targetUrl += '&webSearch=off';
-
-            const apiResponse = await fetch(targetUrl, fetchOptions);
-            if (!apiResponse.ok) throw new Error(`External Text API responded with status ${apiResponse.status}: ${await apiResponse.text()}`);
-            
-             const contentType = apiResponse.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const errorText = await apiResponse.text();
-                throw new Error(`API ภายนอกไม่ได้ส่งข้อมูลกลับมาเป็น JSON (อาจจะล่มชั่วขณะ). Response: ${errorText.substring(0, 200)}...`);
-            }
-            
-            const data = await apiResponse.json();
-            const responseText = data.response || data.result || (data[0] ? data[0].response : undefined);
-            if (!responseText) throw new Error('Invalid or unexpected response format from external AI API.');
-            
-            fullResponse = responseText;
-        }
-
-        // Update count and send response
-        await updateMessageCount(botId);
-        res.status(200).json({ content: fullResponse });
-
+        const responseContent = await handleChatRequest(prompt, botId, imageUrl);
+        res.status(200).json({ content: responseContent });
     } catch (error) {
         console.error(`Error in /api/chat (POST):`, error.message);
         res.status(500).json({ content: `ขออภัย, เกิดข้อผิดพลาด: ${error.message}` });
