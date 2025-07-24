@@ -1,20 +1,23 @@
-// server.js
+// server.js (Adapted for Vercel)
 
 // Import required modules
 const express = require('express');
-const path = require('path');
+// No longer need 'path' as we use a fixed temporary path
 const fs = require('fs').promises;
 
 // Initialize the express app
 const app = express();
-const PORT = process.env.PORT || 3000;
-const AI_DATA_PATH = path.join(__dirname, 'ai_data.json');
+// PORT is managed by Vercel, no need to define it
+
+// IMPORTANT: Vercel has an ephemeral filesystem. Data written here will be lost.
+// We use the /tmp directory which is the only writable location.
+const AI_DATA_PATH = '/tmp/ai_data.json'; 
 const ADMIN_PASSWORD = "975699zz";
 
 // --- Middleware ---
-app.use(express.json({ limit: '50mb' })); // Increased limit for Base64 images
+app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(__dirname));
+// We don't need express.static as Vercel handles static files via vercel.json
 
 
 // --- Helper Functions ---
@@ -24,7 +27,7 @@ const readAiData = async () => {
         const data = await fs.readFile(AI_DATA_PATH, 'utf8');
         return JSON.parse(data);
     } catch (error) {
-        console.log("ai_data.json not found, creating a new one.");
+        console.log("ai_data.json not found in /tmp, creating a new one.");
         await writeAiData({ bots: [] });
         return { bots: [] };
     }
@@ -34,7 +37,7 @@ const writeAiData = async (data) => {
     try {
         await fs.writeFile(AI_DATA_PATH, JSON.stringify(data, null, 2), 'utf8');
     } catch (error) {
-        console.error("Could not write to ai_data.json.", error);
+        console.error("Could not write to ai_data.json in /tmp.", error);
     }
 };
 
@@ -148,14 +151,12 @@ app.post('/api/chat', async (req, res) => {
             const apiResponse = await fetch(targetUrl, fetchOptions);
             if (!apiResponse.ok) throw new Error(`Custom API responded with status ${apiResponse.status}: ${await apiResponse.text()}`);
             
-            // === JAVASCRIPT ที่แก้ไข: เพิ่มการตรวจสอบ Content-Type ===
             const contentType = apiResponse.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 const errorText = await apiResponse.text();
                 throw new Error(`API ภายนอกไม่ได้ส่งข้อมูลกลับมาเป็น JSON (อาจจะล่มชั่วขณะ). Response: ${errorText.substring(0, 200)}...`);
             }
-            // === จบส่วนที่แก้ไข ===
-
+            
             const data = await apiResponse.json();
             const responseText = resolvePath(data, bot.jsonResponsePath);
             if (responseText === undefined || responseText === null) throw new Error(`Could not find response in custom API result using path: "${bot.jsonResponsePath}"`);
@@ -187,13 +188,11 @@ app.post('/api/chat', async (req, res) => {
             const apiResponse = await fetch(targetUrl, fetchOptions);
             if (!apiResponse.ok) throw new Error(`External Text API responded with status ${apiResponse.status}: ${await apiResponse.text()}`);
             
-            // === JAVASCRIPT ที่แก้ไข: เพิ่มการตรวจสอบ Content-Type ===
              const contentType = apiResponse.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 const errorText = await apiResponse.text();
                 throw new Error(`API ภายนอกไม่ได้ส่งข้อมูลกลับมาเป็น JSON (อาจจะล่มชั่วขณะ). Response: ${errorText.substring(0, 200)}...`);
             }
-            // === จบส่วนที่แก้ไข ===
             
             const data = await apiResponse.json();
             const responseText = data.response || data.result || (data[0] ? data[0].response : undefined);
@@ -212,7 +211,6 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// --- Start the server ---
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+// Remove app.listen() for Vercel
+// module.exports allows Vercel to handle the app
+module.exports = app;
