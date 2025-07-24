@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta content="index, follow" name="robots">
+  <meta content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" name="viewport">
+  <meta content="AI Chat Interface - Chat with an AI assistant" name="description">
+  <title>AI Chat</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #8B5CF6; --dark-bg: #0A0A0C; --dark-card: #1E1E26;
+    }
+    body {
+      font-family: 'Inter', sans-serif; background-color: var(--dark-bg);
+      color: #fff; overflow: hidden; height: 100vh; height: 100dvh;
+      position: fixed; width: 100%;
+    }
+    #particleCanvas { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: -1; opacity: 0.7; pointer-events: none; }
+    .main-container { height: 100%; display: flex; flex-direction: column; }
+    .chat-header {
+      background: rgba(18, 18, 24, 0.95); backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(139, 92, 246, 0.1); padding: 0.75rem 1rem;
+      display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;
+    }
+    .ai-avatar img { width: 36px; height: 36px; object-fit: cover; border-radius: 50%; }
+    .header-info h1 { font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .header-info p { font-size: 0.75rem; color: #9CA3AF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .status-indicator { width: 8px; height: 8px; background: #10B981; border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: 0.7; } }
+    .messages-area { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .message { display: flex; gap: 0.75rem; animation: slideUp 0.2s ease-out; max-width: 85%; width: fit-content; align-items: flex-end; }
+    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .message.user { align-self: flex-end; }
+    .message.assistant { align-self: flex-start; }
+
+    .message-avatar { 
+        width: 32px; height: 32px; border-radius: 50%; 
+        flex-shrink: 0; margin-bottom: 25px;
+    }
+    .message-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+    .message-content {
+      background: rgba(30, 30, 38, 0.6); backdrop-filter: blur(10px);
+      border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 18px;
+      padding: 0.625rem 1rem; font-size: 0.9375rem; line-height: 1.5; word-wrap: break-word;
+    }
+    .message.user .message-content { background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.15)); border-color: rgba(139, 92, 246, 0.25); }
+    .message-time { font-size: 0.6875rem; color: #9CA3AF; margin-top: 0.25rem; opacity: 0.8; }
+    .typing-indicator { display: flex; gap: 3px; padding: 0.5rem; }
+    .typing-dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; animation: typing-bounce 1.4s ease-in-out infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing-bounce { 50% { transform: translateY(-6px); } }
+
+    .input-container {
+      background: rgba(18, 18, 24, 0.95); backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(139, 92, 246, 0.1); padding: 0.75rem 1rem;
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    }
+    .input-area { display: flex; gap: 0.75rem; align-items: center; }
+    .input-wrapper { flex: 1; background: rgba(42, 42, 54, 0.5); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 24px; display: flex; align-items: center; padding: 0 0.5rem 0 1rem; }
+    .input-field { flex: 1; background: transparent; border: none; outline: none; color: white; font-size: 0.9375rem; padding: 0.625rem 0; resize: none; }
+    .attach-button {
+      background: none; border: none; color: #9CA3AF; cursor: pointer;
+      font-size: 1.1rem; padding: 0.5rem; transition: color 0.2s ease;
+    }
+    .attach-button:hover { color: var(--primary); }
+    .send-button {
+      width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary), #EC4899);
+      border: none; border-radius: 50%; color: white; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: all 0.2s ease;
+    }
+    .image-preview-container {
+      position: relative;
+      margin-top: 0.75rem;
+      display: none;
+    }
+    .image-preview {
+      max-height: 100px;
+      border-radius: 12px;
+      border: 1px solid rgba(139, 92, 246, 0.25);
+    }
+    .remove-image-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: rgba(255, 255, 255, 0.8);
+      color: #0A0A0C;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .suggestion-chip {
+      background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25);
+      padding: 0.5rem 0.875rem; border-radius: 20px; font-size: 0.8125rem; cursor: pointer;
+      transition: all 0.2s ease; white-space: nowrap; display: flex; align-items: center; gap: 0.375rem;
+    }
+    .suggestion-chip:hover { background: rgba(139, 92, 246, 0.2); }
+    .welcome-screen { text-align: center; padding: 2rem 1rem; max-width: 500px; margin: 0 auto; }
+
+    .welcome-icon img { 
+        width: 112px; height: 112px;
+        margin: 0 auto 1.5rem; border-radius: 50%; 
+        border: 3px solid rgba(255, 255, 255, 0.1);
+    }
+    .welcome-title { 
+        font-size: 2.25rem; font-weight: 800; margin-bottom: 0.5rem; 
+        background: linear-gradient(135deg, var(--primary), #EC4899); 
+        -webkit-background-clip: text; background-clip: text; 
+        color: transparent; letter-spacing: -1px;
+    }
+    .welcome-subtitle { font-size: 1.125rem; color: #9CA3AF; margin-bottom: 1rem; }
+    .welcome-description { font-size: 0.9rem; color: #71717a; margin-bottom: 1.5rem; line-height: 1.6; }
+    .suggestions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; justify-content: center; }
+    .message-content pre { background-color: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 8px; margin: 0.5rem 0; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; font-size: 0.875rem; }
+    .message-content code { background-color: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 4px; font-family: 'Courier New', monospace; word-break: break-all; }
+    .message-content .user-image { max-width: 200px; border-radius: 12px; margin-bottom: 0.5rem; }
+
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+  <div class="main-container">
+    <div class="chat-header">
+      <button onclick="window.location.href='index.html'" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); color: #8B5CF6; padding: 0.5rem; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; transition: all 0.2s ease;">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <div class="ai-avatar"><img src="https://placehold.co/36x36/121218/FFFFFF?text=AI" alt="AI Avatar"></div>
+      <div class="header-info flex-1 min-w-0">
+        <h1>กำลังโหลด...</h1><p>...</p>
+      </div>
+      <div class="status-indicator"></div>
+    </div>
+    <div class="messages-area" id="messagesArea">
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-icon"><img src="https://placehold.co/112x112/0A0A0C/FFFFFF?text=AI" alt="Welcome AI Avatar"></div>
+        <h2 class="welcome-title">กำลังโหลดข้อมูล AI...</h2>
+        <p class="welcome-subtitle">กรุณารอสักครู่</p>
+        <p class="welcome-description"></p>
+        <div class="suggestions"></div>
+      </div>
+    </div>
+
+    <div class="input-container">
+        <div class="image-preview-container" id="imagePreviewContainer">
+            <img src="" alt="Image Preview" class="image-preview" id="imagePreview">
+            <button class="remove-image-btn" id="removeImageBtn" title="ลบรูปภาพ">&times;</button>
+        </div>
+        <div class="input-area">
+            <div class="input-wrapper">
+                <button class="attach-button" id="attachButton" title="แนบไฟล์รูปภาพ">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+                <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                <textarea class="input-field" id="messageInput" placeholder="พิมพ์ข้อความของคุณ..." rows="1"></textarea>
+            </div>
+            <button class="send-button" id="sendButton"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      new (class ParticleSystem { 
+          constructor(t) { 
+              if (!(this.canvas = document.getElementById(t))) return;
+              this.ctx = this.canvas.getContext("2d"), this.particles = [], this.particleCount = window.innerWidth <= 768 ? 150 : 300,
+              this.colors = [{ r: 139, g: 92, b: 246}, { r: 236, g: 72, b: 153}], this.resize(), this.init(), this.animate()
+              window.addEventListener("resize", () => this.resize()) 
+          } 
+          resize() { this.canvas.width = window.innerWidth, this.canvas.height = window.innerHeight } 
+          init() { 
+              this.particles = []; 
+              for (let t = 0; t < this.particleCount; t++) { 
+                  const i = this.colors[Math.floor(Math.random() * this.colors.length)]; 
+                  this.particles.push({ x: Math.random() * this.canvas.width, y: Math.random() * this.canvas.height, vx: .2 * (Math.random() - .5), vy: .2 * (Math.random() - .5), radius: Math.random() * 1.5 + 0.5, color: i, opacity: Math.random() * 0.5 + 0.2, fade: Math.random() * 0.015 + 0.005 }) 
+              } 
+          } 
+          animate() { 
+              this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+              this.particles.forEach(p => { 
+                  p.x += p.vx; p.y += p.vy;
+                  if (p.x < 0) p.x = this.canvas.width; if (p.x > this.canvas.width) p.x = 0;
+                  if (p.y < 0) p.y = this.canvas.height; if (p.y > this.canvas.height) p.y = 0;
+                  p.opacity += p.fade; if (p.opacity <= 0.2 || p.opacity >= 1) { p.fade *= -1; }
+                  this.ctx.beginPath(); this.ctx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
+                  this.ctx.shadowColor = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, 1)`; this.ctx.shadowBlur = 10;
+                  this.ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${p.opacity})`; this.ctx.fill();
+              });
+              this.ctx.shadowBlur = 0; requestAnimationFrame(() => this.animate()) 
+          } 
+      })("particleCanvas");
+
+      let currentBot = null;
+      let attachedImage = null;
+      const messagesArea = document.getElementById('messagesArea');
+      const messageInput = document.getElementById('messageInput');
+      const sendButton = document.getElementById('sendButton');
+      const attachButton = document.getElementById('attachButton');
+      const imageInput = document.getElementById('imageInput');
+      const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+      const imagePreview = document.getElementById('imagePreview');
+      const removeImageBtn = document.getElementById('removeImageBtn');
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const botId = urlParams.get('bot');
+
+      if (!botId) {
+        displayError("ไม่พบ ID ของบอท", "กรุณากลับไปหน้าแรกและเลือกบอทอีกครั้ง");
+      } else {
+        loadBotConfig(botId);
+      }
+
+      async function loadBotConfig(id) {
+        try {
+          const response = await fetch(`/api/bots/${id}`);
+          if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
+          currentBot = await response.json();
+          updateUIWithBotData();
+        } catch (error) {
+          console.error('Error loading bot config:', error);
+          displayError("ไม่สามารถโหลดข้อมูล AI ได้", `เกิดข้อผิดพลาด: ${error.message}`);
+        }
+      }
+
+      function updateUIWithBotData() {
+        if (!currentBot) return;
+        document.title = `${currentBot.name} - AI Chat`;
+        document.querySelector('.chat-header .ai-avatar img').src = currentBot.avatar;
+        document.querySelector('.header-info h1').textContent = currentBot.name;
+        document.querySelector('.header-info p').textContent = `Model: ${currentBot.model.replace(/-/g, ' ')}`;
+
+        if (currentBot.capability === 'vision') {
+            attachButton.style.display = 'block';
+            messageInput.placeholder = 'ถามอะไรเกี่ยวกับรูปนี้...';
+        } else {
+            attachButton.style.display = 'none';
+            messageInput.placeholder = 'พิมพ์ข้อความของคุณ...';
+        }
+
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        welcomeScreen.querySelector('.welcome-icon img').src = currentBot.avatar;
+        welcomeScreen.querySelector('.welcome-title').textContent = currentBot.name;
+        welcomeScreen.querySelector('.welcome-subtitle').textContent = currentBot.welcomeSubtitle;
+        welcomeScreen.querySelector('.welcome-description').textContent = currentBot.description;
+
+        const suggestionsContainer = welcomeScreen.querySelector('.suggestions');
+        suggestionsContainer.innerHTML = '';
+        if (currentBot.suggestions && currentBot.suggestions.length > 0) {
+          currentBot.suggestions.forEach(sugg => {
+            const chip = document.createElement('div');
+            chip.className = 'suggestion-chip';
+            chip.innerHTML = `<i class="fas ${sugg.icon || 'fa-lightbulb'}"></i> <span>${sugg.text}</span>`;
+            chip.addEventListener('click', () => sendSuggestion(sugg.text));
+            suggestionsContainer.appendChild(chip);
+          });
+        }
+      }
+
+      function displayError(title, subtitle) {
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        welcomeScreen.querySelector('.welcome-icon').innerHTML = `<i class="fas fa-exclamation-triangle fa-2x" style="color: #EF4444;"></i>`;
+        welcomeScreen.querySelector('.welcome-title').textContent = title;
+        welcomeScreen.querySelector('.welcome-subtitle').textContent = subtitle;
+        messageInput.disabled = true; sendButton.disabled = true;
+      }
+
+      function getTimeString() { return new Date().toLocaleTimeString('th-TH', { hour: 'numeric', minute: '2-digit', hour12: false }); }
+
+      let messageIdCounter = 0;
+      function addMessage(content, isUser = false, isLoading = false, imageUrl = null) {
+        document.getElementById('welcomeScreen').style.display = 'none';
+        const messageId = `message-${messageIdCounter++}`;
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+        messageDiv.id = messageId;
+        const avatarHtml = isUser ? '' : `<div class="message-avatar"><img src="${currentBot.avatar}" onerror="this.onerror=null;this.src='https://placehold.co/32x32/1E1E26/FFFFFF?text=AI';"></div>`;
+        const imageHtml = imageUrl ? `<img src="${imageUrl}" class="user-image" alt="User upload">` : '';
+        const contentHtml = isLoading
+          ? `<div class="message-content"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`
+          : `<div class="message-content"><div>${imageHtml}${marked.parse(content)}</div><div class="message-time">${getTimeString()}</div></div>`;
+        messageDiv.innerHTML = avatarHtml + contentHtml;
+        messagesArea.appendChild(messageDiv);
+        setTimeout(() => messagesArea.scrollTo({ top: messagesArea.scrollHeight, behavior: 'smooth' }), 100);
+        return messageId;
+      }
+
+      // === JAVASCRIPT ที่แก้ไข: เพิ่มฟังก์ชันอัปเดตข้อความแบบปกติ ===
+      function updateMessage(messageId, markdownContent) {
+          const messageElement = document.getElementById(messageId);
+          if (!messageElement) return;
+          const messageContentEl = messageElement.querySelector('.message-content');
+          if (!messageContentEl) return;
+
+          messageContentEl.innerHTML = `<div>${marked.parse(markdownContent)}</div><div class="message-time">${getTimeString()}</div>`;
+          messagesArea.scrollTo({ top: messagesArea.scrollHeight, behavior: 'smooth' });
+      }
+      // === จบส่วนที่แก้ไข ===
+
+      // === JAVASCRIPT ที่แก้ไข: เปลี่ยนกลับเป็น getChatResponse แบบปกติ ===
+      async function getChatResponse(prompt, imageBase64) {
+          if (!currentBot || !botId) {
+              displayError("ข้อผิดพลาด", "ไม่พบข้อมูลของบอท");
+              return;
+          }
+          const loadingId = addMessage('', false, true);
+
+          try {
+              const response = await fetch(`/api/chat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      prompt: prompt,
+                      botId: botId,
+                      imageUrl: imageBase64 || ''
+                  })
+              });
+
+              const data = await response.json();
+
+              if (!response.ok) {
+                  throw new Error(data.content || `Server responded with status: ${response.status}`);
+              }
+
+              updateMessage(loadingId, data.content);
+
+          } catch (error) {
+              console.error('Chat API error:', error);
+              updateMessage(loadingId, `ขออภัย, เกิดข้อผิดพลาด: ${error.message}`);
+          }
+      }
+      // === จบส่วนที่แก้ไข ===
+
+      function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message && !attachedImage) return;
+
+        addMessage(message, true, false, attachedImage);
+
+        const imageToSend = attachedImage;
+
+        messageInput.value = ''; 
+        messageInput.style.height = 'auto'; 
+        removeImage();
+        messageInput.focus();
+
+        getChatResponse(message, imageToSend);
+      }
+
+      function sendSuggestion(suggestion) {
+        addMessage(suggestion, true);
+        getChatResponse(suggestion, null);
+      }
+
+      function handleImageAttachment(event) {
+          const file = event.target.files[0];
+          if (file) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  attachedImage = e.target.result;
+                  imagePreview.src = attachedImage;
+                  imagePreviewContainer.style.display = 'block';
+              };
+              reader.readAsDataURL(file);
+          }
+      }
+      function removeImage() {
+          attachedImage = null;
+          imageInput.value = '';
+          imagePreviewContainer.style.display = 'none';
+          imagePreview.src = '';
+      }
+      attachButton.addEventListener('click', () => imageInput.click());
+      imageInput.addEventListener('change', handleImageAttachment);
+      removeImageBtn.addEventListener('click', removeImage);
+
+      messageInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px'; });
+      messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+      sendButton.addEventListener('click', sendMessage);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta content="index, follow" name="robots">
+  <meta content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" name="viewport">
+  <meta content="Select an AI assistant to chat with" name="description">
+  <title>เลือกผู้ช่วย AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root { 
+      --dark-bg: #0A0A0C; 
+      --primary: #8B5CF6; 
+      --secondary: #EC4899; 
+      --dark-card: #16161A;
+      --card-border: rgba(139, 92, 246, 0.1);
+      --card-border-hover: rgba(139, 92, 246, 0.4);
+      --input-bg: rgba(255, 255, 255, 0.05);
+      --danger: #F43F5E;
+      --online: #22C55E;
+      --info: #3B82F6;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Inter', sans-serif; 
+      background-color: var(--dark-bg); 
+      color: #E2E8F0;
+      min-height: 100vh; 
+    }
+    #particleCanvas { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: -1; opacity: 0.7; pointer-events: none; }
+
+    .main-container { 
+      max-width: 800px;
+      width: 100%; 
+      padding: 3rem 1.5rem;
+      margin: 0 auto; 
+      z-index: 1; 
+    }
+
+    .bot-list { display: flex; flex-direction: column; gap: 1.5rem; }
+    .bot-card-link { text-decoration: none; color: inherit; display: block; position: relative; border-radius: 1rem; transition: transform 0.3s ease; }
+    .bot-card-link:hover { transform: translateY(-5px); }
+
+    .bot-card { 
+        display: flex; 
+        align-items: flex-start;
+        gap: 1rem;
+        background: var(--dark-card); 
+        border: 1px solid var(--card-border); 
+        border-radius: 1rem; 
+        padding: 1.5rem; 
+        transition: all 0.3s ease; 
+        overflow: hidden; 
+        position: relative; 
+        z-index: 1;
+    }
+
+    .avatar-container {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        flex-shrink: 0;
+    }
+    .avatar-container::before {
+        content: '';
+        position: absolute;
+        top: -3px; left: -3px; right: -3px; bottom: -3px;
+        border-radius: 0.9rem;
+        background: conic-gradient(
+            from 180deg at 50% 50%,
+            #EC4899, #8B5CF6, #EC4899
+        );
+        z-index: -1;
+        opacity: 0;
+        transition: opacity 0.4s ease-out;
+    }
+    @keyframes rotate {
+        100% { transform: rotate(360deg); }
+    }
+    .bot-card-link:hover .avatar-container::before {
+        opacity: 1;
+        animation: rotate 4s linear infinite;
+    }
+    .bot-card-link.clicked {
+        animation: click-effect 0.6s ease-out;
+    }
+    @keyframes click-effect {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.03); }
+        100% { transform: scale(1); }
+    }
+    .bot-card-link.clicked .avatar-container::before {
+        opacity: 1;
+        animation: rotate 1.5s linear infinite;
+    }
+
+    .bot-card img { 
+        width: 100%; 
+        height: 100%; 
+        border-radius: 0.75rem; 
+        object-fit: cover; 
+        border: 2px solid rgba(255,255,255,0.1); 
+        position: relative;
+        z-index: 2;
+    }
+
+    .card-content { flex-grow: 1; min-width: 0; }
+    .card-title-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .card-title-line h4 {
+        font-size: 1.25rem; 
+        font-weight: 700; 
+        color: #F8FAFC; 
+        word-break: break-word;
+        margin-bottom: 0;
+    }
+    .card-content p { font-size: 0.9rem; color: #94A3B8; margin-top: 0.25rem; }
+
+    .tags-container { display: flex; align-items: center; flex-wrap: nowrap; gap: 0.5rem; margin-top: 0.75rem; }
+    .model-tag, .capability-tag { font-size: 0.75rem; font-weight: 500; padding: 0.2rem 0.6rem; border-radius: 999px; display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+
+    .model-tag { background-color: rgba(139, 92, 246, 0.1); color: var(--primary); }
+    .capability-tag.vision { background-color: rgba(236, 72, 153, 0.1); color: var(--secondary); }
+    .capability-tag.chat { background-color: rgba(59, 130, 246, 0.1); color: #3B82F6; }
+    .capability-tag.custom { background-color: rgba(245, 158, 11, 0.1); color: #F59E0B; }
+    .card-actions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+
+    .online-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--online);
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    .online-indicator {
+        width: 10px;
+        height: 10px;
+        background-color: var(--online);
+        border-radius: 50%;
+        animation: pulse-green 2s infinite;
+    }
+    @keyframes pulse-green {
+        0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+        70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+
+    .action-btn {
+        border-radius: 50%; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s ease; z-index: 5;
+    }
+
+    .copy-api-btn {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+        background: rgba(59, 130, 246, 0.2); 
+        color: var(--info);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        opacity: 0;
+        visibility: hidden;
+        transform: scale(0.5);
+    }
+    .copy-api-btn:hover { 
+        background: rgba(59, 130, 246, 0.4); 
+        transform: scale(1.1);
+    }
+    .bot-card:hover .copy-api-btn {
+        opacity: 1;
+        visibility: visible;
+        transform: scale(1);
+    }
+    .bot-card.delete-mode .copy-api-btn {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    .delete-bot-btn {
+        width: 36px; height: 36px;
+        background: rgba(244, 63, 94, 0.2); color: var(--danger);
+        border: 1px solid rgba(244, 63, 94, 0.3);
+        opacity: 0; visibility: hidden; transform: scale(0.5);
+        transition: all 0.3s ease-out;
+    }
+    .bot-card.delete-mode .delete-bot-btn {
+        opacity: 1; visibility: visible; transform: scale(1);
+    }
+
+    .message-counter {
+        position: absolute;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #94A3B8;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        transition: color 0.3s ease, background-color 0.3s ease;
+    }
+    .bot-card:hover .message-counter {
+        color: var(--primary);
+        background-color: rgba(139, 92, 246, 0.15);
+    }
+
+    #addAIFloatingButton { position: fixed; bottom: 2rem; right: 2rem; width: 60px; height: 60px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 50%; color: white; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); transition: all 0.3s ease; border: none; }
+    #addAIFloatingButton:hover { transform: scale(1.1) rotate(15deg); box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4); }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(8px); animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-content { background: var(--dark-card); border: 1px solid var(--card-border); padding: 2rem; border-radius: 1rem; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.5); animation: slideInUp 0.4s ease; }
+    @keyframes slideInUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .input-group { position: relative; margin-bottom: 1.25rem; }
+    .input-group .icon { position: absolute; top: 50%; transform: translateY(-50%); left: 1rem; color: #94A3B8; transition: color 0.2s ease; }
+    .input-group textarea + .icon { top: 1rem; transform: none; }
+    .input-group input, .input-group textarea, .input-group select { width: 100%; padding: 0.85rem 1rem 0.85rem 3rem; border: 1px solid rgba(139, 92, 246, 0.2); background: var(--input-bg); color: white; border-radius: 0.5rem; appearance: none; transition: border-color 0.2s ease; }
+    .input-group select { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394A3B8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.75rem center; background-repeat: no-repeat; background-size: 1.25em; }
+    .input-group:focus-within .icon { color: var(--primary); }
+    .input-group input:focus, .input-group textarea:focus, .input-group select:focus { outline: none; border-color: var(--primary); }
+    #notification { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); padding: 0.75rem 1.5rem; border-radius: 0.5rem; color: white; font-weight: 500; z-index: 9999; transition: bottom 0.5s ease-in-out; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    #suggestionIconPicker { max-height: 140px; overflow-y: auto; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.2); display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .icon-picker-btn { background: rgba(255,255,255,0.08); border: 1px solid transparent; color: #94A3B8; width: 40px; height: 40px; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s ease; font-size: 1rem; flex-shrink: 0; }
+    .icon-picker-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .icon-picker-btn.active { background: var(--primary); color: white; border-color: rgba(255,255,255,0.3); }
+    .suggestion-chip-modal { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); padding: 0.3rem 0.75rem; border-radius: 1rem; font-size: 0.8125rem; color: #E2E8F0; }
+    .remove-suggestion { background: none; border: none; color: #94A3B8; cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 0 0 0.25rem; transition: color 0.2s ease; }
+    .remove-suggestion:hover { color: var(--danger); }
+    .form-label { display: block; margin-bottom: 0.5rem; color: #cbd5e1; font-size: 0.875rem; font-weight: 500; }
+
+    .avatar-uploader { display: flex; align-items: center; gap: 1rem; background: var(--input-bg); border-radius: 0.5rem; padding: 0.75rem; border: 1px solid rgba(139, 92, 246, 0.2); }
+    #avatarPreview { width: 80px; height: 80px; border-radius: 0.5rem; object-fit: cover; flex-shrink: 0; }
+    .upload-options { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+    .url-input { width: 100%; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.25rem; color: white; }
+    .upload-btn { background: var(--primary); color: white; border: none; border-radius: 0.25rem; padding: 0.5rem 0.75rem; cursor: pointer; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+  <div class="main-container">
+    <main><div class="bot-list" id="botList"></div></main>
+  </div>
+
+  <button id="addAIFloatingButton" onclick="showAddAIForm()" title="เพิ่ม AI ใหม่"><i class="fas fa-plus"></i></button>
+
+  <div id="addAIModal" class="modal-overlay">
+    <div class="modal-content">
+      <h2 style="color: var(--primary); margin-bottom: 2rem; text-align: center; font-size: 1.5rem; font-weight: 600;">สร้างผู้ช่วย AI ของคุณ</h2>
+      <form id="addAIForm">
+        <div class="input-group"><i class="fas fa-robot icon"></i><input type="text" id="aiName" required placeholder="ชื่อ AI (สูงสุด 16 ตัวอักษร)" maxlength="16"></div>
+        <div class="input-group"><i class="fas fa-align-left icon"></i><input type="text" id="aiDescription" required placeholder="คำอธิบายสั้นๆ"></div>
+
+        <div style="margin-bottom: 1.25rem;">
+            <label class="form-label">รูปโปรไฟล์</label>
+            <div class="avatar-uploader">
+                <img id="avatarPreview" src="https://placehold.co/80x80/1E1E26/4A4A52?text=Preview" alt="Avatar Preview">
+                <div class="upload-options">
+                    <button type="button" id="uploadButton" class="upload-btn">
+                        <i class="fas fa-upload"></i> อัปโหลดไฟล์
+                    </button>
+                    <input type="url" id="aiAvatarUrl" placeholder="หรือวาง URL ที่นี่" class="url-input">
+                </div>
+                <input type="file" id="aiAvatarFile" accept="image/*,.gif" style="display: none;">
+            </div>
+        </div>
+
+        <!-- === HTML ที่แก้ไข: เพิ่ม Dropdown สำหรับ Capability === -->
+        <div class="input-group">
+            <i class="fas fa-star-of-life icon"></i>
+            <select id="aiCapability" required>
+                <option value="chat">สนทนาเท่านั้น (Text Only)</option>
+                <option value="vision">สนทนาและเข้าใจรูปภาพ (Vision)</option>
+            </select>
+        </div>
+        <!-- === จบส่วนที่แก้ไข === -->
+
+        <div class="input-group"><i class="fas fa-brain icon"></i>
+          <select id="aiModel" required>
+            <option value="" disabled selected>เลือกโมเดล AI</option>
+            <optgroup label="Pre-built Models">
+              <option value="gpt-4o-pro">GPT-4o Pro</option><option value="gpt-4.1">GPT-4.1</option>
+              <option value="claude3-haiku">Claude 3 Haiku</option><option value="gemini-flash-2.0">Gemini Flash 2.0</option>
+              <option value="gemini-pro">Gemini Pro</option><option value="gpt-4o">GPT-4o</option>
+            </optgroup>
+            <optgroup label="Custom">
+              <option value="custom">Custom API</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div id="customApiFields" style="display: none;">
+            <div class="input-group">
+                <i class="fas fa-link icon"></i>
+                <input type="url" id="aiCustomApiUrl" placeholder="URL เต็ม (ใช้ [PROMPT] แทนที่ข้อความ)">
+            </div>
+            <div class="input-group">
+                <i class="fas fa-code icon"></i>
+                <input type="text" id="aiJsonResponsePath" placeholder="JSON Response Path (เช่น data.response)">
+            </div>
+        </div>
+
+        <div id="standardModelFields">
+          <div>
+              <label for="aiSystemPrompt" class="form-label">พรอมต์สำหรับสร้างบทบาท (System Prompt)</label>
+              <div class="input-group">
+                  <textarea id="aiSystemPrompt" placeholder="กรุณาใส่พรอมต์สำหรับสร้างบทบาทเฉพาะทางของ AI ที่นี่..." rows="4"></textarea>
+                  <i class="fas fa-scroll icon"></i>
+              </div>
+          </div>
+        </div>
+
+        <div>
+            <div class="input-group"><i class="fas fa-hand-sparkles icon"></i><input type="text" id="aiWelcomeTitle" required placeholder="หัวข้อต้อนรับ"></div>
+            <div class="input-group"><i class="fas fa-comment-dots icon"></i><textarea id="aiWelcomeSubtitle" required placeholder="คำบรรยายต้อนรับ" rows="2"></textarea></div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label class="form-label">คำถามแนะนำ</label>
+                <div id="suggestionsPreview" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; min-height: 2rem;"></div>
+                <label class="form-label">เลือกไอคอน</label>
+                <div id="suggestionIconPicker"></div>
+                <div class="input-group" style="margin-top: 0.75rem;"><i class="fas fa-plus icon"></i><input type="text" id="aiSuggestionText" placeholder="พิมพ์คำถามแล้วกด 'เพิ่ม'"></div>
+                <button type="button" id="addSuggestionButton" style="width: 100%; background: var(--primary); border: none; color: white; padding: 0.75rem; border-radius: 0.5rem; cursor: pointer;">เพิ่มคำถาม</button>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+          <button type="button" onclick="hideAddAIForm()" style="background: rgba(255, 255, 255, 0.1); border: none; color: #fff; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: pointer;">ยกเลิก</button>
+          <button type="submit" id="submitAiButton" style="background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;">สร้าง AI</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="deleteConfirmModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 400px;">
+          <h2 style="color: var(--danger); text-align: center; font-size: 1.5rem; font-weight: 600;">ยืนยันการลบ</h2>
+          <p id="deleteConfirmText" style="text-align: center; margin: 1.5rem 0; color: #cbd5e1;">คุณแน่ใจหรือไม่ว่าต้องการลบบอท? การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+          <div class="input-group">
+              <i class="fas fa-key icon"></i>
+              <input type="password" id="adminPasswordInput" required placeholder="รหัสผ่านแอดมิน">
+          </div>
+          <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem;">
+              <button id="cancelDeleteBtn" style="background: rgba(255, 255, 255, 0.1); border: none; color: #fff; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: pointer;">ยกเลิก</button>
+              <button id="confirmDeleteBtn" style="background: var(--danger); border: none; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: pointer;">ยืนยันการลบ</button>
+          </div>
+      </div>
+  </div>
+
+  <div id="notification"></div>
+
+  <script>
+    let currentSuggestions = []; 
+    let selectedSuggestionIcon = 'fa-lightbulb';
+    let avatarDataSource = '';
+    const availableIcons = [
+        'fa-lightbulb', 'fa-comment', 'fa-question-circle', 'fa-info-circle', 'fa-check-circle', 'fa-times-circle',
+        'fa-exclamation-triangle', 'fa-exclamation-circle', 'fa-plus-circle', 'fa-minus-circle', 'fa-plus', 'fa-minus',
+        'fa-star', 'fa-heart', 'fa-thumbs-up', 'fa-thumbs-down', 'fa-bookmark', 'fa-tag', 'fa-tags', 'fa-bell',
+        'fa-bullhorn', 'fa-paper-plane', 'fa-envelope', 'fa-reply', 'fa-share', 'fa-link', 'fa-pen-to-square',
+        'fa-edit', 'fa-trash', 'fa-cog', 'fa-cogs', 'fa-gear', 'fa-gears', 'fa-wrench', 'fa-tools', 'fa-home', 'fa-user',
+        'fa-users', 'fa-user-circle', 'fa-user-plus', 'fa-user-times', 'fa-user-cog', 'fa-key', 'fa-lock', 'fa-unlock',
+        'fa-eye', 'fa-eye-slash', 'fa-camera', 'fa-video', 'fa-microphone', 'fa-microphone-slash', 'fa-calendar-days',
+        'fa-clock', 'fa-history', 'fa-hourglass', 'fa-map-marker-alt', 'fa-map-location-dot', 'fa-compass', 'fa-flag',
+        'fa-sign-in-alt', 'fa-sign-out-alt', 'fa-arrow-right-from-bracket', 'fa-arrow-right-to-bracket',
+        'fa-code', 'fa-code-branch', 'fa-code-commit', 'fa-code-merge', 'fa-terminal', 'fa-keyboard', 'fa-mouse',
+        'fa-laptop', 'fa-mobile-screen-button', 'fa-tablet-screen-button', 'fa-desktop', 'fa-server', 'fa-hdd',
+        'fa-database', 'fa-microchip', 'fa-robot', 'fa-brain', 'fa-rocket', 'fa-satellite-dish', 'fa-wifi', 'fa-ethernet',
+        'fa-bolt', 'fa-power-off', 'fa-battery-full', 'fa-battery-half', 'fa-battery-quarter', 'fa-battery-empty',
+        'fa-plug', 'fa-gamepad', 'fa-vr-cardboard',
+        'fa-briefcase', 'fa-building', 'fa-chart-line', 'fa-chart-pie', 'fa-chart-bar', 'fa-chart-area',
+        'fa-dollar-sign', 'fa-euro-sign', 'fa-pound-sign', 'fa-yen-sign', 'fa-money-bill-wave', 'fa-wallet',
+        'fa-credit-card', 'fa-receipt', 'fa-calculator', 'fa-percent', 'fa-project-diagram', 'fa-sitemap',
+        'fa-handshake', 'fa-bullseye', 'fa-award', 'fa-trophy', 'fa-medal', 'fa-certificate',
+        'fa-file', 'fa-file-alt', 'fa-file-word', 'fa-file-excel', 'fa-file-powerpoint', 'fa-file-pdf', 'fa-file-image',
+        'fa-file-video', 'fa-file-audio', 'fa-file-archive', 'fa-file-code', 'fa-file-csv', 'fa-folder', 'fa-folder-open',
+        'fa-book', 'fa-book-open', 'fa-newspaper', 'fa-copy', 'fa-paste', 'fa-save', 'fa-print', 'fa-thumbtack', 'fa-paperclip',
+        'fa-align-left', 'fa-align-center', 'fa-align-right', 'fa-align-justify', 'fa-list', 'fa-list-ol', 'fa-list-ul',
+        'fa-bold', 'fa-italic', 'fa-underline', 'fa-strikethrough', 'fa-quote-left', 'fa-quote-right',
+        'fa-flask', 'fa-atom', 'fa-dna', 'fa-microscope', 'fa-graduation-cap', 'fa-book-reader', 'fa-chalkboard-teacher',
+        'fa-school', 'fa-ruler', 'fa-drafting-compass', 'fa-language', 'fa-calculator', 'fa-earth-americas', 'fa-globe',
+        'fa-seedling', 'fa-leaf', 'fa-tree', 'fa-mountain', 'fa-volcano',
+        'fa-heart-pulse', 'fa-pills', 'fa-syringe', 'fa-stethoscope', 'fa-hospital', 'fa-user-doctor',
+        'fa-user-nurse', 'fa-band-aid', 'fa-virus', 'fa-bacteria',
+        'fa-utensils', 'fa-mug-hot', 'fa-coffee', 'fa-wine-glass', 'fa-beer-mug-empty', 'fa-pizza-slice', 'fa-ice-cream',
+        'fa-hamburger', 'fa-hotdog', 'fa-bacon', 'fa-cheese', 'fa-bread-slice', 'fa-apple-whole', 'fa-carrot', 'fa-pepper-hot',
+        'fa-cookie-bite', 'fa-birthday-cake', 'fa-martini-glass-citrus',
+        'fa-car', 'fa-bus', 'fa-train', 'fa-subway', 'fa-plane', 'fa-ship', 'fa-anchor', 'fa-bicycle',
+        'fa-motorcycle', 'fa-truck', 'fa-taxi', 'fa-traffic-light', 'fa-road', 'fa-map',
+        'fa-sun', 'fa-moon', 'fa-cloud', 'fa-cloud-sun', 'fa-cloud-rain', 'fa-snowflake', 'fa-wind', 'fa-water',
+        'fa-fire', 'fa-smog', 'fa-temperature-high', 'fa-temperature-low',
+        'fa-futbol', 'fa-baseball', 'fa-basketball', 'fa-volleyball', 'fa-golf-ball-tee',
+        'fa-table-tennis-paddle-ball', 'fa-bowling-ball', 'fa-chess', 'fa-dice', 'fa-puzzle-piece',
+        'fa-music', 'fa-headphones', 'fa-palette', 'fa-film',
+        'fa-cart-shopping', 'fa-bag-shopping', 'fa-store', 'fa-barcode', 'fa-qrcode', 'fa-gift', 'fa-tags',
+        'fa-dog', 'fa-cat', 'fa-horse', 'fa-fish', 'fa-dragon', 'fa-dove', 'fa-hippo', 'fa-otter', 'fa-paw',
+        'fa-crow', 'fa-frog', 'fa-spider', 'fa-bugs', 'fa-shrimp',
+        'fa-wand-magic-sparkles', 'fa-crown', 'fa-ghost', 'fa-hat-wizard', 'fa-mask', 'fa-umbrella', 'fa-shield-halved',
+        'fa-bomb', 'fa-biohazard', 'fa-radiation', 'fa-recycle', 'fa-peace', 'fa-yin-yang'
+    ];
+    let botIdToDelete = null;
+
+    // === JAVASCRIPT ที่แก้ไข: เพิ่มรายชื่อโมเดลที่รองรับรูปภาพ ===
+    const visionModels = ['gpt-4o', 'gemini-pro', 'gemini-flash-2.0'];
+    // === จบส่วนที่แก้ไข ===
+
+    document.addEventListener('DOMContentLoaded', () => {
+      new (class ParticleSystem { 
+          constructor(t) { 
+              if (!(this.canvas = document.getElementById(t))) return;
+              this.ctx = this.canvas.getContext("2d"), this.particles = [], this.particleCount = window.innerWidth <= 768 ? 150 : 300,
+              this.colors = [{ r: 139, g: 92, b: 246}, { r: 236, g: 72, b: 153}], this.resize(), this.init(), this.animate()
+              window.addEventListener("resize", () => this.resize()) 
+          } 
+          resize() { this.canvas.width = window.innerWidth, this.canvas.height = window.innerHeight } 
+          init() { 
+              this.particles = []; 
+              for (let t = 0; t < this.particleCount; t++) { 
+                  const i = this.colors[Math.floor(Math.random() * this.colors.length)]; 
+                  this.particles.push({ x: Math.random() * this.canvas.width, y: Math.random() * this.canvas.height, vx: .2 * (Math.random() - .5), vy: .2 * (Math.random() - .5), radius: Math.random() * 1.5 + 0.5, color: i, opacity: Math.random() * 0.5 + 0.2, fade: Math.random() * 0.015 + 0.005 }) 
+              } 
+          } 
+          animate() { 
+              this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+              this.particles.forEach(p => { 
+                  p.x += p.vx; p.y += p.vy;
+                  if (p.x < 0) p.x = this.canvas.width; if (p.x > this.canvas.width) p.x = 0;
+                  if (p.y < 0) p.y = this.canvas.height; if (p.y > this.canvas.height) p.y = 0;
+                  p.opacity += p.fade; if (p.opacity <= 0.2 || p.opacity >= 1) { p.fade *= -1; }
+                  this.ctx.beginPath(); this.ctx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
+                  this.ctx.shadowColor = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, 1)`; this.ctx.shadowBlur = 10;
+                  this.ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${p.opacity})`; this.ctx.fill();
+              });
+              this.ctx.shadowBlur = 0; requestAnimationFrame(() => this.animate()) 
+          } 
+      })("particleCanvas");
+
+      loadAIData();
+      renderIconPicker();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+        document.getElementById('addSuggestionButton').addEventListener('click', handleAddSuggestion);
+        document.getElementById('aiSuggestionText').addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSuggestion(); }});
+        document.getElementById('addAIForm').addEventListener('submit', handleFormSubmit);
+        document.getElementById('addAIModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) hideAddAIForm(); });
+        document.getElementById('deleteConfirmModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) hideDeleteModal(); });
+        document.getElementById('cancelDeleteBtn').addEventListener('click', hideDeleteModal);
+        document.getElementById('confirmDeleteBtn').addEventListener('click', handleDelete);
+
+        const uploadButton = document.getElementById('uploadButton');
+        const fileInput = document.getElementById('aiAvatarFile');
+        const urlInput = document.getElementById('aiAvatarUrl');
+        const previewImg = document.getElementById('avatarPreview');
+
+        uploadButton.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImg.src = e.target.result;
+                    avatarDataSource = e.target.result;
+                    urlInput.value = '';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        urlInput.addEventListener('input', () => {
+            const url = urlInput.value.trim();
+            if (url) {
+                previewImg.src = url;
+                avatarDataSource = url;
+                fileInput.value = '';
+            } else {
+                previewImg.src = 'https://placehold.co/80x80/1E1E26/4A4A52?text=Preview';
+            }
+        });
+
+        // === JAVASCRIPT ที่แก้ไข: เพิ่ม Event Listener สำหรับตรวจสอบโมเดล ===
+        document.getElementById('aiModel').addEventListener('change', (e) => {
+            const model = e.target.value;
+            const isCustom = model === 'custom';
+
+            document.getElementById('customApiFields').style.display = isCustom ? 'block' : 'none';
+            document.getElementById('standardModelFields').style.display = isCustom ? 'none' : 'block';
+            document.getElementById('aiCustomApiUrl').required = isCustom;
+            document.getElementById('aiJsonResponsePath').required = isCustom;
+            document.getElementById('aiSystemPrompt').required = !isCustom;
+
+            const capabilitySelect = document.getElementById('aiCapability');
+            const visionOption = capabilitySelect.querySelector('option[value="vision"]');
+
+            // ถ้าเป็น Custom API หรือ โมเดลไม่รองรับ Vision ให้ปิด Option
+            if (isCustom || !visionModels.includes(model)) {
+                capabilitySelect.value = 'chat'; // Reset to default
+                visionOption.disabled = true;
+            } else {
+                visionOption.disabled = false;
+            }
+        });
+        // === จบส่วนที่แก้ไข ===
+    }
+
+    async function loadAIData() {
+      try {
+        const response = await fetch('/api/bots');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        renderAICards(await response.json());
+      } catch (error) {
+        console.error('Error loading AI data:', error);
+        document.getElementById('botList').innerHTML = `<p style="color: #EF4444; text-align: center;">ไม่สามารถโหลดข้อมูล AI ได้</p>`;
+      }
+    }
+
+    function renderAICards(bots) {
+      const botList = document.getElementById('botList');
+      botList.innerHTML = '';
+      if (!bots || bots.length === 0) {
+        botList.innerHTML = `<p style="text-align: center; color: #94A3B8; padding: 2rem 0;">ยังไม่มีผู้ช่วย AI, กดปุ่ม <i class="fas fa-plus-circle" style="color:var(--primary)"></i> เพื่อสร้างผู้ช่วยคนแรกของคุณ</p>`;
+        return;
+      }
+      bots.forEach(bot => {
+        const cardLink = document.createElement('a');
+        cardLink.href = `chat.html?bot=${bot.id}`;
+        cardLink.className = 'bot-card-link';
+        const card = document.createElement('div');
+        card.className = 'bot-card';
+
+        // === HTML ที่แก้ไข: อัปเดตการแสดงผล Capability Tag ===
+        const capabilityTag = bot.capability === 'vision'
+            ? `<div class="capability-tag vision"><i class="fas fa-eye"></i>Vision</div>`
+            : `<div class="capability-tag chat"><i class="fas fa-comment-dots"></i>Chat</div>`;
+        // === จบส่วนที่แก้ไข ===
+
+        const modelDisplay = bot.model === 'custom' 
+            ? `<div class="model-tag capability-tag custom"><i class="fas fa-cogs"></i>Custom API</div>`
+            : `<div class="model-tag">${bot.model ? bot.model.replace(/-/g, ' ') : 'N/A'}</div>`;
+
+        const messageCount = bot.messageCount || 0;
+        const counterHtml = `
+            <div class="message-counter" title="จำนวนข้อความ">
+                <i class="fas fa-comments"></i>
+                <span>${messageCount}</span>
+            </div>
+        `;
+
+        card.innerHTML = `
+            <button class="action-btn copy-api-btn" data-bot-id="${bot.id}" title="คัดลอก API"><i class="fas fa-link"></i></button>
+            <div class="avatar-container"><img src="${bot.avatar}" alt="${bot.name}" onerror="this.onerror=null;this.src='https://placehold.co/64x64/16161A/FFFFFF?text=AI';"></div>
+            <div class="card-content">
+              <div class="card-title-line"><h4>${bot.name}</h4></div>
+              <p>${bot.description}</p>
+              <div class="tags-container">${modelDisplay}${capabilityTag}</div>
+            </div>
+            <div class="card-actions">
+                <div class="online-status"><div class="online-indicator"></div><span>ออนไลน์</span></div>
+                <button class="action-btn delete-bot-btn" data-bot-id="${bot.id}" data-bot-name="${bot.name}" title="ลบบอท"><i class="fas fa-trash-alt"></i></button>
+            </div>
+            ${counterHtml}
+            `;
+        cardLink.appendChild(card);
+        botList.appendChild(cardLink);
+
+        cardLink.addEventListener('click', function(e) {
+            if (e.target.closest('.action-btn')) return;
+            if (!card.classList.contains('delete-mode')) {
+                e.preventDefault();
+                const destination = this.href;
+                this.classList.add('clicked');
+                this.addEventListener('animationend', () => { window.location.href = destination; }, { once: true });
+            } else { e.preventDefault(); }
+        });
+
+        let longPressTimer = null;
+        cardLink.addEventListener('contextmenu', e => e.preventDefault());
+        cardLink.addEventListener('mousedown', e => { if (e.button === 2) { e.currentTarget.querySelector('.bot-card').classList.toggle('delete-mode'); }});
+        cardLink.addEventListener('touchstart', (e) => { longPressTimer = setTimeout(() => { e.currentTarget.querySelector('.bot-card').classList.toggle('delete-mode'); if (navigator.vibrate) navigator.vibrate(50); }, 500); }, { passive: true });
+        cardLink.addEventListener('touchend', () => clearTimeout(longPressTimer));
+        cardLink.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+        card.querySelector('.delete-bot-btn').addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); showDeleteModal(event.currentTarget.dataset.botId, event.currentTarget.dataset.botName); });
+        card.querySelector('.copy-api-btn').addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); handleCopyApiClick(event); });
+      });
+    }
+
+    function handleCopyApiClick(event) {
+        const button = event.currentTarget;
+        const botId = button.dataset.botId;
+        const baseUrl = window.location.origin;
+        const apiUrl = `${baseUrl}/api/chat?prompt=YOUR_PROMPT&botId=${botId}`;
+        copyToClipboard(apiUrl);
+    }
+
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showNotification('คัดลอก API link สำเร็จ!');
+        }, () => {
+            showNotification('ไม่สามารถคัดลอกได้', true);
+        });
+    }
+
+    function showAddAIForm() {
+      currentSuggestions = []; 
+      renderSuggestionsPreview();
+      document.getElementById('addAIForm').reset();
+      avatarDataSource = '';
+      document.getElementById('avatarPreview').src = 'https://placehold.co/80x80/1E1E26/4A4A52?text=Preview';
+      document.getElementById('aiModel').dispatchEvent(new Event('change'));
+      document.getElementById('addAIModal').style.display = 'flex';
+    }
+    function hideAddAIForm() {
+      document.getElementById('addAIModal').style.display = 'none';
+    }
+    function showDeleteModal(botId, botName) {
+        botIdToDelete = botId;
+        document.getElementById('deleteConfirmText').innerHTML = `คุณแน่ใจหรือไม่ว่าต้องการลบบอท <br> <strong style="color: var(--danger);">${botName}</strong>?`;
+        document.getElementById('adminPasswordInput').value = ''; 
+        document.getElementById('deleteConfirmModal').style.display = 'flex';
+    }
+    function hideDeleteModal() {
+        botIdToDelete = null;
+        document.getElementById('deleteConfirmModal').style.display = 'none';
+    }
+
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const submitButton = document.getElementById('submitAiButton');
+      if (!avatarDataSource) {
+        showNotification('กรุณาอัปโหลดรูปภาพหรือใส่ URL', true);
+        return;
+      }
+      submitButton.disabled = true;
+      submitButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i> กำลังสร้าง...`;
+
+      const newAI = {
+        id: 'ai_' + Date.now(), 
+        name: document.getElementById('aiName').value,
+        description: document.getElementById('aiDescription').value, 
+        avatar: avatarDataSource,
+        model: document.getElementById('aiModel').value, 
+        capability: document.getElementById('aiCapability').value,
+        welcomeTitle: document.getElementById('aiWelcomeTitle').value,
+        welcomeSubtitle: document.getElementById('aiWelcomeSubtitle').value,
+        suggestions: currentSuggestions
+      };
+
+      if (newAI.model === 'custom') {
+        newAI.apiUrl = document.getElementById('aiCustomApiUrl').value;
+        newAI.jsonResponsePath = document.getElementById('aiJsonResponsePath').value;
+        newAI.systemPrompt = '';
+      } else {
+        newAI.systemPrompt = document.getElementById('aiSystemPrompt').value;
+      }
+
+      try {
+        const response = await fetch('/api/bots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newAI) });
+        if (!response.ok) throw new Error((await response.json()).error || 'Server error');
+        hideAddAIForm(); 
+        loadAIData(); 
+        showNotification('เพิ่ม AI สำเร็จแล้ว!');
+      } catch (error) {
+        console.error('Error adding AI:', error); 
+        showNotification(`เกิดข้อผิดพลาด: ${error.message}`, true);
+      } finally {
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'สร้าง AI';
+      }
+    }
+
+    function handleAddSuggestion() {
+        const input = document.getElementById('aiSuggestionText');
+        if (input.value.trim()) {
+            currentSuggestions.push({ icon: selectedSuggestionIcon, text: input.value.trim() });
+            input.value = ''; renderSuggestionsPreview();
+        }
+        input.focus();
+    }
+
+    function renderIconPicker() {
+        const picker = document.getElementById('suggestionIconPicker');
+        picker.innerHTML = availableIcons.map(icon => `<button type="button" class="icon-picker-btn ${icon === selectedSuggestionIcon ? 'active' : ''}" data-icon="${icon}" title="${icon.replace('fa-','')}"><i class="fas ${icon}"></i></button>`).join('');
+        picker.querySelectorAll('.icon-picker-btn').forEach(btn => btn.onclick = () => { selectedSuggestionIcon = btn.dataset.icon; renderIconPicker(); });
+    }
+    function renderSuggestionsPreview() {
+        const preview = document.getElementById('suggestionsPreview');
+        preview.innerHTML = currentSuggestions.map((s, i) => `<div class="suggestion-chip-modal"><i class="fas ${s.icon}" style="opacity: 0.8;"></i><span>${s.text}</span><button type="button" class="remove-suggestion" data-index="${i}" title="ลบ">&times;</button></div>`).join('');
+        preview.querySelectorAll('.remove-suggestion').forEach(btn => btn.onclick = () => { currentSuggestions.splice(btn.dataset.index, 1); renderSuggestionsPreview(); });
+    }
+    function showNotification(message, isError = false) {
+        const el = document.getElementById('notification');
+        el.textContent = message; 
+        el.style.backgroundColor = isError ? 'var(--danger)' : '#22C55E';
+        el.style.bottom = '2rem';
+        setTimeout(() => { el.style.bottom = '-100px'; }, 3000);
+    }
+     async function handleDelete() {
+        if (!botIdToDelete) return;
+        const passwordInput = document.getElementById('adminPasswordInput');
+        const adminPassword = passwordInput.value;
+        if (!adminPassword) {
+            showNotification('กรุณาใส่รหัสผ่านแอดมิน', true);
+            return;
+        }
+        try {
+            const response = await fetch(`/api/bots/${botIdToDelete}`, { 
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adminPassword: adminPassword })
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to delete bot');
+            }
+            showNotification('ลบบอทสำเร็จแล้ว');
+            loadAIData();
+        } catch (error) {
+            console.error('Delete error:', error);
+            showNotification(error.message, true);
+        } finally {
+            hideDeleteModal();
+        }
+    }
+  </script>
+</body>
+</html>
